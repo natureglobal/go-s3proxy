@@ -1,4 +1,4 @@
-package s3file
+package s3proxy
 
 import (
 	"net/http"
@@ -22,7 +22,8 @@ func newRequest(method, url string) *http.Request {
 func testHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", okHandler)
-	mux.HandleFunc("/.well-known/acme-challenge/", Handler)
+	mux.Handle("/.well-known/acme-challenge/", Proxy("go-s3proxy"))
+	mux.Handle("/.well-known/acme-challenge2/", Proxy("invalid"))
 	return mux
 }
 
@@ -47,13 +48,18 @@ func TestHandler(t *testing.T) {
 			Path:   "/.well-known/acme-challenge/200",
 			Code:   200,
 		},
+		{
+			Method: "GET",
+			Path:   "/.well-known/acme-challenge2/403",
+			Code:   403,
+		},
 	}
 	for _, test := range tests {
 		t.Logf("Testing %s %s", test.Method, test.Path)
 		writer := httptest.NewRecorder()
 		testHandler().ServeHTTP(writer, newRequest(test.Method, test.Path))
 		if writer.Code != test.Code {
-			t.Errorf("expected %d but got %d", test.Code, writer.Code)
+			t.Errorf("expected %d but got %d, res.headers: %v", test.Code, writer.Code, writer.HeaderMap)
 		}
 	}
 }
