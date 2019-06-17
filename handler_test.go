@@ -3,6 +3,7 @@ package s3proxy
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 )
 
@@ -19,10 +20,18 @@ func newRequest(method, url string) *http.Request {
 	return req
 }
 
+var testBucket = "go-s3proxy"
+
+func init() {
+	if bucket := os.Getenv("S3PROXY_TESTBUCKET"); bucket != "" {
+		testBucket = bucket
+	}
+}
+
 func testHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", okHandler)
-	mux.Handle("/.well-known/acme-challenge/", Proxy("go-s3proxy"))
+	mux.Handle("/.well-known/acme-challenge/", Proxy(testBucket))
 	mux.Handle("/.well-known/acme-challenge2/", Proxy("invalid"))
 	return mux
 }
