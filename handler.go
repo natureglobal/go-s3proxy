@@ -39,6 +39,7 @@ func Proxy(bucketName string) http.Handler {
 		r.Header.Set("User-Agent", UserAgent)
 
 		base := path.Base(r.URL.Path)
+		// ref. https://docs.aws.amazon.com/ja_jp/sdk-for-go/v1/developer-guide/s3-example-presigned-urls.html
 		req, _ := Client.GetObjectRequest(&s3.GetObjectInput{
 			Bucket: aws.String(bucketName),
 			Key:    aws.String(base),
