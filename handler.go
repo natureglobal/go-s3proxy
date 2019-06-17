@@ -8,8 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mitchellh/goamz/aws"
-	"github.com/mitchellh/goamz/s3"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 )
 
 var (
@@ -20,11 +21,10 @@ var (
 )
 
 func mustNewS3() *s3.S3 {
-	auth, err := aws.EnvAuth()
-	if err != nil {
-		panic(err)
-	}
-	return s3.New(auth, aws.USEast)
+	sess := session.Must(session.NewSession(&aws.Config{
+		Region: aws.String("us-east-1"),
+	}))
+	return s3.New(sess)
 }
 
 func Proxy(bucketName string) http.Handler {
@@ -34,15 +34,23 @@ func Proxy(bucketName string) http.Handler {
 		}
 	})
 
-	bucket := Client.Bucket(bucketName)
-
 	proxy := httputil.ReverseProxy{Director: func(r *http.Request) {
 		r.Header = http.Header{} // Don't send client's request headers to Amazon.
 		r.Header.Set("User-Agent", UserAgent)
 
 		base := path.Base(r.URL.Path)
-		signed := bucket.SignedURL(base, time.Now().Add(ExpiresInterval))
-		parsed, err := url.Parse(signed)
+		req, _ := Client.GetObjectRequest(&s3.GetObjectInput{
+			Bucket: aws.String(bucketName),
+			Key:    aws.String(base),
+		})
+		signedURL, err := req.Presign(10 * time.Second)
+		if err != nil {
+			r.URL = nil
+			r.Host = ""
+			return
+		}
+
+		parsed, err := url.Parse(signedURL)
 		if err != nil {
 			r.URL = nil
 			r.Host = ""
